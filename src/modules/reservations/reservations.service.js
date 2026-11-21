@@ -12,6 +12,7 @@ const ALLOWED_TRANSITIONS = {
 };
 
 // Przedziały półotwarte [start, end): rezerwacje stykające się (10:00-12:00 i 12:00-13:00) NIE nakładają się
+// Przedziały półotwarte [start, end): rezerwacje stykające się (10:00-12:00 i 12:00-13:00) NIE nakładają się
 function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && bStart < aEnd;
 }
