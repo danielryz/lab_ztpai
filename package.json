@@ -1,16 +1,26 @@
 {
   "name": "room-booking-api",
-  "version": "2.0.0",
-  "description": "Room Booking API - architektura warstwowa, walidacja Zod, globalna obsługa błędów",
+  "version": "3.0.0",
+  "description": "Room Booking API - PostgreSQL (Docker), Knex, migracje, relacje, pagination i ochrona przed double booking",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:psql": "docker exec -it room-booking-db psql -U postgres -d room_booking",
+    "migrate": "knex migrate:latest",
+    "migrate:status": "knex migrate:status",
+    "rollback": "knex migrate:rollback",
+    "seed": "knex seed:run",
+    "double-booking": "node scripts/double-booking.js"
   },
   "license": "ISC",
   "dependencies": {
     "express": "^5.3.0",
+    "knex": "^3.1.0",
+    "pg": "^8.16.3",
     "zod": "^4.6.7"
   }
 }

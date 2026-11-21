@@ -3,6 +3,10 @@ const requestLogger = require("./middleware/requestLogger");
 const notFound = require("./middleware/notFound");
 const errorHandler = require("./middleware/errorHandler");
 
+const { createBuildingsService } = require("./modules/buildings/buildings.service");
+const { createBuildingsController } = require("./modules/buildings/buildings.controller");
+const { createBuildingsRouter } = require("./modules/buildings/buildings.routes");
+
 const { createRoomsService } = require("./modules/rooms/rooms.service");
 const { createRoomsController } = require("./modules/rooms/rooms.controller");
 const { createRoomsRouter } = require("./modules/rooms/rooms.routes");
@@ -14,15 +18,17 @@ const { createReservationsRouter } = require("./modules/reservations/reservation
 const { createDebugRouter } = require("./modules/debug/debug.routes");
 
 // Buduje aplikację, ale jej NIE uruchamia (brak app.listen)
-function createApp({ roomsRepository, reservationsRepository, now = () => new Date() }) {
+function createApp({ runInTransaction, now = () => new Date() }) {
   const app = express();
 
   app.use(requestLogger);
   app.use(express.json());
 
-  const roomsService = createRoomsService({ roomsRepository });
-  const reservationsService = createReservationsService({ roomsRepository, reservationsRepository, now });
+  const buildingsService = createBuildingsService({ runInTransaction });
+  const roomsService = createRoomsService({ runInTransaction });
+  const reservationsService = createReservationsService({ runInTransaction, now });
 
+  app.use("/api/buildings", createBuildingsRouter(createBuildingsController(buildingsService)));
   app.use("/api/rooms", createRoomsRouter(createRoomsController(roomsService)));
   app.use("/api/reservations", createReservationsRouter(createReservationsController(reservationsService)));
   app.use("/api/debug", createDebugRouter());

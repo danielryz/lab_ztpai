@@ -3,7 +3,7 @@ const { z } = require("zod");
 const reservationIdParams = z.object({
   id: z.coerce.number().int().positive()
 });
-D
+
 const createReservationBody = z.object({
   roomId: z.number().int().positive(),
   reservedBy: z.string().trim().min(3).max(100),
@@ -12,8 +12,21 @@ const createReservationBody = z.object({
   endTime: z.iso.datetime({ offset: true })
 }).strict();
 
+// Whitelista sortowania - nieznana wartość -> 400
+const SORT_VALUES = ["startTime", "-startTime", "createdAt", "-createdAt", "participants", "-participants"];
+
 const listReservationsQuery = z.object({
-  roomId: z.coerce.number().int().positive().optional()
-});
+  roomId: z.coerce.number().int().positive().optional(),
+  buildingId: z.coerce.number().int().positive().optional(),
+  status: z.enum(["CONFIRMED", "CANCELLED"]).optional(),
+  from: z.iso.datetime({ offset: true }).optional(),
+  to: z.iso.datetime({ offset: true }).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  sort: z.enum(SORT_VALUES).default("startTime")
+}).refine(
+  q => !q.from || !q.to || new Date(q.from) < new Date(q.to),
+  { message: "from must be earlier than to", path: ["from"] }
+);
 
 module.exports = { reservationIdParams, createReservationBody, listReservationsQuery };

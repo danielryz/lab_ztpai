@@ -1,0 +1,17 @@
+# PostgreSQL 16 w kontenerze - konkretna wersja obrazu + nazwany volume (dane przetrwają usunięcie kontenera)
+services:
+  db:
+    image: postgres:16
+    container_name: room-booking-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: room_booking
+    ports:
+      - "5432:5432"
+    volumes:
+      - room-booking-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  room-booking-pgdata:
