@@ -23,11 +23,14 @@ const { createReservationsService } = require("./modules/reservations/reservatio
 const { createReservationsController } = require("./modules/reservations/reservations.controller");
 const { createReservationsRouter } = require("./modules/reservations/reservations.routes");
 
+const { createAuditService, createAdminRouter } = require("./modules/audit/audit.module");
 const { createDebugRouter } = require("./modules/debug/debug.routes");
+const { noopEventBus } = require("./events/eventBus");
 
-// Buduje aplikację, ale jej NIE uruchamia (brak app.listen).
+// Buduje aplikację, ale jej NIE uruchamia (brak app.listen) - dzięki temu Supertest testuje ją bez portu.
 // config przychodzi z zewnątrz (src/config) - app.js nie czyta process.env.
-function createApp({ config, runInTransaction, now = () => new Date() }) {
+// eventBus - listenery rejestruje composition root (server.js); domyślnie "pusty" bus.
+function createApp({ config, runInTransaction, eventBus = noopEventBus, now = () => new Date() }) {
   const app = express();
 
   app.use(requestLogger);
@@ -39,7 +42,8 @@ function createApp({ config, runInTransaction, now = () => new Date() }) {
   const authService = createAuthService({ runInTransaction, tokenService, bcryptCost: config.bcrypt.cost });
   const buildingsService = createBuildingsService({ runInTransaction });
   const roomsService = createRoomsService({ runInTransaction, now });
-  const reservationsService = createReservationsService({ runInTransaction, now });
+  const reservationsService = createReservationsService({ runInTransaction, eventBus, now });
+  const auditService = createAuditService({ runInTransaction });
 
   // --- publiczne: /api/auth/register, /api/auth/login, /api/docs ---
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi, {
@@ -56,6 +60,7 @@ function createApp({ config, runInTransaction, now = () => new Date() }) {
   app.use("/api/buildings", createBuildingsRouter(createBuildingsController(buildingsService)));
   app.use("/api/rooms", createRoomsRouter(createRoomsController(roomsService)));
   app.use("/api/reservations", createReservationsRouter(createReservationsController(reservationsService)));
+  app.use("/api/admin", createAdminRouter(auditService));
   app.use("/api/debug", createDebugRouter());
 
   app.use(notFound);

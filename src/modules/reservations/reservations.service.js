@@ -1,5 +1,6 @@
 const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require("../../errors/AppError");
 const { ROLES } = require("../users/roles");
+const { noopEventBus, EVENTS } = require("../../events/eventBus");
 
 const MINUTE = 60 * 1000;
 const MIN_DURATION_MS = 15 * MINUTE;
@@ -10,6 +11,7 @@ const ALLOWED_TRANSITIONS = {
   CANCELLED: [] // stan końcowy
 };
 
+// Przedziały półotwarte [start, end): rezerwacje stykające się (10:00-12:00 i 12:00-13:00) NIE nakładają się
 function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && bStart < aEnd;
 }
@@ -31,9 +33,11 @@ function assertCanAccess(reservation, currentUser) {
 
 // Repositories przychodzą przez runInTransaction (Unit of Work) - service nie zna Knexa.
 // currentUser = { id, role } (z tokenu, ustawiony przez authenticate) - service sam pilnuje uprawnień.
-function createReservationsService({ runInTransaction, now = () => new Date() }) {
+// eventBus - eventy publikujemy dopiero PO zatwierdzeniu transakcji (await runInTransaction kończy się po COMMIT).
+// Nieudana operacja (wyjątek -> ROLLBACK) nie dochodzi do publish, więc nie publikuje eventu.
+function createReservationsService({ runInTransaction, eventBus = noopEventBus, now = () => new Date() }) {
   async function createReservation(input, currentUser) {
-    return runInTransaction(async ({ roomsRepository, reservationsRepository }) => {
+    const created = await runInTransaction(async ({ roomsRepository, reservationsRepository }) => {
       const room = await roomsRepository.findById(input.roomId);
       if (!room) throw new NotFoundError("Room");
 
@@ -87,15 +91,29 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
         createdAt: now()
       });
     });
+
+    // Tu transakcja jest już zatwierdzona (COMMIT)
+    eventBus.publish(EVENTS.RESERVATION_CREATED, {
+      reservationId: created.id,
+      roomId: created.roomId,
+      userId: created.userId,
+      startTime: new Date(created.startTime).toISOString(),
+      endTime: new Date(created.endTime).toISOString()
+    });
+
+    return created;
   }
 
   async function cancelReservation(id, currentUser) {
-    return runInTransaction(async ({ reservationsRepository }) => {
+    let changed = false;
+
+    const result = await runInTransaction(async ({ reservationsRepository }) => {
       const reservation = await reservationsRepository.findById(id);
       assertCanAccess(reservation, currentUser);
 
       const target = "CANCELLED";
 
+      // Idempotentne ponowne anulowanie - bez zmian, bez eventu
       if (reservation.status === target) return reservation;
 
       if (!ALLOWED_TRANSITIONS[reservation.status].includes(target)) {
@@ -113,8 +131,20 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
         );
       }
 
+      changed = true;
       return reservationsRepository.update(id, { status: target, cancelledAt: now() });
     });
+
+    if (changed) {
+      eventBus.publish(EVENTS.RESERVATION_CANCELLED, {
+        reservationId: result.id,
+        roomId: result.roomId,
+        userId: result.userId,
+        cancelledBy: currentUser.id
+      });
+    }
+
+    return result;
   }
 
   async function getReservation(id, currentUser) {

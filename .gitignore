@@ -1,4 +1,9 @@
 node_modules/
+coverage/
 .env
-# hasła dla klienta HTTP PhpStorm (requests.http)
-http-client.private.env.json
+.env.*
+!.env.example
+
+*.pdf
+*.docx
+sprawozdanie/

@@ -23,7 +23,9 @@ const envSchema = z.object({
 });
 
 function loadConfig(env) {
-  const result = envSchema.safeParse(env);
+  // Pusta zmienna (np. SEED_ADMIN_EMAIL= w docker-compose.yml) traktowana jak brak zmiennej
+  const nonEmpty = Object.fromEntries(Object.entries(env).filter(([, value]) => value !== ""));
+  const result = envSchema.safeParse(nonEmpty);
 
   if (!result.success) {
     const lines = result.error.issues.map(issue => {

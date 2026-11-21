@@ -34,9 +34,9 @@ module.exports = {
   openapi: "3.0.3",
   info: {
     title: "Room Booking API",
-    version: "4.0.0",
+    version: "5.0.0",
     description: [
-      "Zadanie 04 - authentication (JWT HS256), authorization (role + ownership), konfiguracja.",
+      "Zadanie 05 - testy (Jest + Supertest), Docker Compose, eventy + audit log, CI (GitHub Actions).",
       "",
       "**Jak wywołać chroniony endpoint:** `POST /api/auth/login` → skopiuj `accessToken` → przycisk **Authorize** → wklej token (bez słowa Bearer).",
       "",
@@ -51,7 +51,8 @@ module.exports = {
     { name: "Auth", description: "Rejestracja, logowanie, dane zalogowanego użytkownika" },
     { name: "Buildings", description: "GET - każdy zalogowany, POST/PATCH/DELETE - tylko ADMIN" },
     { name: "Rooms", description: "GET - każdy zalogowany, POST/PATCH/DELETE - tylko ADMIN" },
-    { name: "Reservations", description: "USER - tylko własne rezerwacje (cudze → 404), ADMIN - wszystkie" }
+    { name: "Reservations", description: "USER - tylko własne rezerwacje (cudze → 404), ADMIN - wszystkie" },
+    { name: "Admin", description: "Tylko ADMIN - audit log eventów" }
   ],
 
   components: {
@@ -248,11 +249,54 @@ module.exports = {
             }
           }
         }
+      },
+
+      AuditLogEntry: {
+        type: "object",
+        properties: {
+          id: { type: "integer", example: 2 },
+          eventType: { type: "string", enum: ["reservation.created", "reservation.cancelled"], example: "reservation.cancelled" },
+          payload: {
+            type: "object",
+            description: "Zależy od eventType (kolumna jsonb)",
+            example: { reservationId: 6, roomId: 1, userId: 6, cancelledBy: 1 }
+          },
+          createdAt: { type: "string", format: "date-time" }
+        }
+      },
+      AuditLogList: {
+        type: "object",
+        properties: {
+          data: { type: "array", items: ref("AuditLogEntry") },
+          meta: {
+            type: "object",
+            properties: {
+              page: { type: "integer", example: 1 },
+              limit: { type: "integer", example: 20 },
+              total: { type: "integer", example: 2 },
+              totalPages: { type: "integer", example: 1 }
+            }
+          }
+        }
       }
     }
   },
 
   paths: {
+    // ---------- Admin ----------
+    "/api/admin/audit-log": {
+      get: {
+        tags: ["Admin"],
+        summary: "Audit log eventów rezerwacji (tylko ADMIN), od najnowszych",
+        parameters: [
+          { name: "eventType", in: "query", schema: { type: "string", enum: ["reservation.created", "reservation.cancelled"] } },
+          { name: "page", in: "query", schema: { type: "integer", minimum: 1, default: 1 } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } }
+        ],
+        responses: { 200: ok("OK", ref("AuditLogList")), 400: R[400], 401: R[401], 403: R[403] }
+      }
+    },
+
     // ---------- Auth ----------
     "/api/auth/register": {
       post: {
