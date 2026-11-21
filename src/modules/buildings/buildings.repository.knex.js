@@ -32,6 +32,15 @@ function createBuildingsRepository(db) {
     async create({ name, address }) {
       const [row] = await db("buildings").insert({ name, address }).returning("*");
       return toBuilding({ ...row, rooms_count: 0 });
+    },
+
+    async update(id, { name, address }) {
+      await db("buildings").where({ id }).update({ name, address }); // undefined = kolumna pominięta
+      return this.findById(id);
+    },
+
+    async delete(id) {
+      await db("buildings").where({ id }).del();
     }
   };
 }

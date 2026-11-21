@@ -1,13 +1,10 @@
-// Konfiguracja Knex (używana przez CLI: migrate / seed oraz przez aplikację)
-try {
-  process.loadEnvFile();
-} catch {
-  // brak pliku .env - zmienne mogą przyjść z zewnątrz
-}
+// Konfiguracja Knex (CLI: migrate / seed oraz aplikacja).
+// Nie czyta process.env - wszystko przychodzi z modułu src/config.
+const config = require("./src/config");
 
 module.exports = {
   client: "pg",
-  connection: process.env.DATABASE_URL,
+  connection: config.db.url,
   migrations: { directory: "./src/db/migrations" },
   seeds: { directory: "./src/db/seeds" }
 };

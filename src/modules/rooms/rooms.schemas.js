@@ -10,4 +10,10 @@ const createRoomBody = z.object({
   capacity: z.number().int().positive()
 }).strict();
 
-module.exports = { roomIdParams, createRoomBody };
+// PATCH - nazwa i pojemność (przeniesienie sali do innego budynku nie jest wspierane)
+const updateRoomBody = createRoomBody.omit({ buildingId: true }).partial().strict().refine(
+  b => Object.keys(b).length > 0,
+  { message: "At least one field is required" }
+);
+
+module.exports = { roomIdParams, createRoomBody, updateRoomBody };

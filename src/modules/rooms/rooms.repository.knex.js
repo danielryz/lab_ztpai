@@ -41,6 +41,15 @@ function createRoomsRepository(db) {
       return this.findById(id);
     },
 
+    async update(id, { name, capacity }) {
+      await db("rooms").where({ id }).update({ name, capacity }); // undefined = kolumna pominięta
+      return this.findById(id);
+    },
+
+    async delete(id) {
+      await db("rooms").where({ id }).del();
+    },
+
     // SELECT ... FOR UPDATE - blokada wiersza sali do końca transakcji
     async lockById(id) {
       await db("rooms").where({ id }).forUpdate().first("id");

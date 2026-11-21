@@ -29,6 +29,17 @@ function createBuildingsRepository({ seed = DEFAULT_BUILDINGS, countRooms = () =
       return withCount(building);
     },
 
+    async update(id, changes) {
+      const building = buildings.find(b => b.id === id);
+      if (changes.name && buildings.some(b => b.id !== id && b.name === changes.name)) throw uniqueViolation();
+      Object.assign(building, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
+      return withCount(building);
+    },
+
+    async delete(id) {
+      buildings.splice(buildings.findIndex(b => b.id === id), 1);
+    },
+
     // używane przez repository sal (sprawdzenie FK)
     exists(id) {
       return buildings.some(b => b.id === id);

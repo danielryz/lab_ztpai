@@ -37,6 +37,19 @@ function createRoomsRepository({ seed = DEFAULT_ROOMS, buildings } = {}) {
       return withBuilding(room);
     },
 
+    async update(id, changes) {
+      const room = rooms.find(r => r.id === id);
+      if (changes.name && rooms.some(r => r.id !== id && r.buildingId === room.buildingId && r.name === changes.name)) {
+        throw uniqueViolation();
+      }
+      Object.assign(room, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
+      return withBuilding(room);
+    },
+
+    async delete(id) {
+      rooms.splice(rooms.findIndex(r => r.id === id), 1);
+    },
+
     // W pamięci nie ma czego blokować - metoda istnieje dla zgodności interfejsu
     async lockById() {},
 

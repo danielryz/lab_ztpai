@@ -1,4 +1,5 @@
 // Każde seed:run daje ten sam stan: TRUNCATE ... RESTART IDENTITY => ID zawsze od 1
+// Uruchamiany PO 00_users.js - user_id wskazuje na konta z tamtego seeda.
 const HOUR = 60 * 60 * 1000;
 
 exports.seed = async function (knex) {
@@ -22,29 +23,34 @@ exports.seed = async function (knex) {
 
   await knex("reservations").insert([
     {
-      room_id: 3, reserved_by: "Jan Kowalski", participants: 20,
+      room_id: 3, user_id: 2,  // jan.kowalski
+      participants: 20,
       start_time: "2026-11-10T10:00:00Z", end_time: "2026-11-10T12:00:00Z",
       status: "CONFIRMED", created_at: "2026-10-27T08:00:00Z"
     },
     {
       // styka się z rezerwacją 1 (12:00) - dozwolone
-      room_id: 3, reserved_by: "Anna Nowak", participants: 12,
+      room_id: 3, user_id: 3,  // anna.nowak
+      participants: 12,
       start_time: "2026-11-10T12:00:00Z", end_time: "2026-11-10T13:00:00Z",
       status: "CONFIRMED", created_at: "2026-10-28T09:30:00Z"
     },
     {
-      room_id: 1, reserved_by: "Piotr Wiśniewski", participants: 8,
+      room_id: 1, user_id: 4,  // piotr.wisniewski
+      participants: 8,
       start_time: "2026-11-12T09:00:00Z", end_time: "2026-11-12T10:30:00Z",
       status: "CANCELLED", cancelled_at: "2026-10-30T15:00:00Z", created_at: "2026-10-29T11:00:00Z"
     },
     {
       // już się rozpoczęła (trwa w momencie seedowania) - do testu RESERVATION_ALREADY_STARTED
-      room_id: 4, reserved_by: "Seed - spotkanie w trakcie", participants: 5,
+      room_id: 4, user_id: 2,  // jan.kowalski
+      participants: 5,
       start_time: new Date(now - HOUR), end_time: new Date(now + HOUR),
       status: "CONFIRMED", created_at: new Date(now - 24 * HOUR)
     },
     {
-      room_id: 5, reserved_by: "Maria Zielińska", participants: 6,
+      room_id: 5, user_id: 5,  // maria.zielinska
+      participants: 6,
       start_time: "2026-11-20T14:00:00Z", end_time: "2026-11-20T16:00:00Z",
       status: "CONFIRMED", created_at: "2026-10-31T10:00:00Z"
     }

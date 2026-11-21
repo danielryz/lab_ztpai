@@ -1,4 +1,5 @@
-const { NotFoundError, ConflictError, ValidationError } = require("../../errors/AppError");
+const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require("../../errors/AppError");
+const { ROLES } = require("../users/roles");
 
 const MINUTE = 60 * 1000;
 const MIN_DURATION_MS = 15 * MINUTE;
@@ -17,9 +18,21 @@ function timeRangeError(field, message) {
   return new ValidationError([{ location: "body", field, message }], "Invalid reservation time range");
 }
 
-// Repositories przychodzą przez runInTransaction (Unit of Work) - service nie zna Knexa
+const isAdmin = currentUser => currentUser.role === ROLES.ADMIN;
+
+// Ownership: właściciel albo ADMIN. Obcy USER dostaje 404 - rezerwacje są prywatne,
+// nie zdradzamy nawet, że rezerwacja o takim ID istnieje.
+function assertCanAccess(reservation, currentUser) {
+  if (!reservation) throw new NotFoundError("Reservation");
+  if (!isAdmin(currentUser) && reservation.userId !== currentUser.id) {
+    throw new NotFoundError("Reservation");
+  }
+}
+
+// Repositories przychodzą przez runInTransaction (Unit of Work) - service nie zna Knexa.
+// currentUser = { id, role } (z tokenu, ustawiony przez authenticate) - service sam pilnuje uprawnień.
 function createReservationsService({ runInTransaction, now = () => new Date() }) {
-  async function createReservation(input) {
+  async function createReservation(input, currentUser) {
     return runInTransaction(async ({ roomsRepository, reservationsRepository }) => {
       const room = await roomsRepository.findById(input.roomId);
       if (!room) throw new NotFoundError("Room");
@@ -65,21 +78,21 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
 
       return reservationsRepository.create({
         roomId: room.id,
-        reservedBy: input.reservedBy,
+        // Właściciel wyłącznie z tokenu - body nie może go ustawić (userId/reservedBy -> 400 w schemacie)
+        userId: currentUser.id,
         participants: input.participants,
         startTime: new Date(start),
         endTime: new Date(end),
         status: "CONFIRMED",
-        createdAt: now(),
-        internalNote: "created via API v2"
+        createdAt: now()
       });
     });
   }
 
-  async function cancelReservation(id) {
+  async function cancelReservation(id, currentUser) {
     return runInTransaction(async ({ reservationsRepository }) => {
       const reservation = await reservationsRepository.findById(id);
-      if (!reservation) throw new NotFoundError("Reservation");
+      assertCanAccess(reservation, currentUser);
 
       const target = "CANCELLED";
 
@@ -92,6 +105,7 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
         );
       }
 
+      // Reguła obowiązuje także ADMINa
       if (new Date(reservation.startTime).getTime() <= now().getTime()) {
         throw new ConflictError(
           "Reservation has already started and cannot be cancelled",
@@ -103,17 +117,29 @@ function createReservationsService({ runInTransaction, now = () => new Date() })
     });
   }
 
-  async function getReservation(id) {
+  async function getReservation(id, currentUser) {
     return runInTransaction(async ({ reservationsRepository }) => {
       const reservation = await reservationsRepository.findById(id);
-      if (!reservation) throw new NotFoundError("Reservation");
+      assertCanAccess(reservation, currentUser);
       return reservation;
     });
   }
 
-  async function listReservations(query) {
+  async function listReservations(query, currentUser) {
+    const filters = { ...query };
+
+    if (!isAdmin(currentUser)) {
+      // Filtr ?userId= jest tylko dla ADMINa. USER -> 403 zamiast cichego ignorowania:
+      // klient od razu widzi, że prosi o coś, do czego nie ma prawa, a nie dostaje "po cichu" innych danych.
+      if (query.userId !== undefined) {
+        throw new ForbiddenError("Filter userId is available only for ADMIN");
+      }
+      // USER widzi tylko swoje rezerwacje - filtr dokłada backend, niezależnie od query
+      filters.userId = currentUser.id;
+    }
+
     return runInTransaction(async ({ reservationsRepository }) => {
-      const { items, total } = await reservationsRepository.findAll(query);
+      const { items, total } = await reservationsRepository.findAll(filters);
       return {
         items,
         meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) }

@@ -1,30 +1,30 @@
 const HOUR = 60 * 60 * 1000;
 
-// Te same dane co seed bazy (rezerwacja 4 już się rozpoczęła)
+// Te same dane co seed bazy (rezerwacja 4 już się rozpoczęła). userId -> konta z seeda 00_users.
 function defaultReservations(startedAt = Date.now()) {
   return [
     {
-      id: 1, roomId: 3, reservedBy: "Jan Kowalski", participants: 20,
+      id: 1, roomId: 3, userId: 2, participants: 20,
       startTime: new Date("2026-11-10T10:00:00Z"), endTime: new Date("2026-11-10T12:00:00Z"),
       status: "CONFIRMED", createdAt: new Date("2026-10-27T08:00:00Z"), cancelledAt: null
     },
     {
-      id: 2, roomId: 3, reservedBy: "Anna Nowak", participants: 12,
+      id: 2, roomId: 3, userId: 3, participants: 12,
       startTime: new Date("2026-11-10T12:00:00Z"), endTime: new Date("2026-11-10T13:00:00Z"),
       status: "CONFIRMED", createdAt: new Date("2026-10-28T09:30:00Z"), cancelledAt: null
     },
     {
-      id: 3, roomId: 1, reservedBy: "Piotr Wiśniewski", participants: 8,
+      id: 3, roomId: 1, userId: 4, participants: 8,
       startTime: new Date("2026-11-12T09:00:00Z"), endTime: new Date("2026-11-12T10:30:00Z"),
       status: "CANCELLED", createdAt: new Date("2026-10-29T11:00:00Z"), cancelledAt: new Date("2026-10-30T15:00:00Z")
     },
     {
-      id: 4, roomId: 4, reservedBy: "Seed - spotkanie w trakcie", participants: 5,
+      id: 4, roomId: 4, userId: 2, participants: 5,
       startTime: new Date(startedAt - HOUR), endTime: new Date(startedAt + HOUR),
       status: "CONFIRMED", createdAt: new Date(startedAt - 24 * HOUR), cancelledAt: null
     },
     {
-      id: 5, roomId: 5, reservedBy: "Maria Zielińska", participants: 6,
+      id: 5, roomId: 5, userId: 5, participants: 6,
       startTime: new Date("2026-11-20T14:00:00Z"), endTime: new Date("2026-11-20T16:00:00Z"),
       status: "CONFIRMED", createdAt: new Date("2026-10-31T10:00:00Z"), cancelledAt: null
     }
@@ -37,29 +37,32 @@ const SORT_FIELDS = {
   participants: r => r.participants
 };
 
-// rooms - repository sal in-memory (do osadzenia sali i budynku w rezerwacji)
-function createReservationsRepository({ seed = defaultReservations(), rooms } = {}) {
+// rooms / users - repositories in-memory (do osadzenia sali, budynku i właściciela w rezerwacji)
+function createReservationsRepository({ seed = defaultReservations(), rooms, users } = {}) {
   const reservations = structuredClone(seed);
 
   // Licznik ID - tylko rośnie, więc nigdy nie powstanie duplikat
   let nextId = Math.max(0, ...reservations.map(r => r.id)) + 1;
 
-  async function withRoom(r) {
+  async function withRelations(r) {
     if (!r) return null;
     const room = await rooms?.findById(r.roomId);
+    const user = await users?.findById(r.userId);
     return {
       ...r,
-      room: room ? { id: room.id, name: room.name, building: room.building } : { id: r.roomId }
+      room: room ? { id: room.id, name: room.name, building: room.building } : { id: r.roomId },
+      user: { id: r.userId, email: user?.email ?? null }
     };
   }
 
   return {
-    async findAll({ roomId, buildingId, status, from, to, page = 1, limit = 20, sort = "startTime" } = {}) {
-      const all = await Promise.all(reservations.map(withRoom));
+    async findAll({ userId, roomId, buildingId, status, from, to, page = 1, limit = 20, sort = "startTime" } = {}) {
+      const all = await Promise.all(reservations.map(withRelations));
       const fromMs = from ? new Date(from).getTime() : null;
       const toMs = to ? new Date(to).getTime() : null;
 
       const filtered = all.filter(r =>
+        (!userId || r.userId === userId) &&
         (!roomId || r.roomId === roomId) &&
         (!buildingId || r.room.building?.id === buildingId) &&
         (!status || r.status === status) &&
@@ -76,18 +79,22 @@ function createReservationsRepository({ seed = defaultReservations(), rooms } = 
     },
 
     async findById(id) {
-      return withRoom(reservations.find(r => r.id === id));
+      return withRelations(reservations.find(r => r.id === id));
     },
 
     async findByRoomAndStatus(roomId, status) {
-      return Promise.all(reservations.filter(r => r.roomId === roomId && r.status === status).map(withRoom));
+      return Promise.all(reservations.filter(r => r.roomId === roomId && r.status === status).map(withRelations));
+    },
+
+    async existsForRoom(roomId) {
+      return reservations.some(r => r.roomId === roomId);
     },
 
     async create(data) {
       const reservation = {
         id: nextId++,
         roomId: data.roomId,
-        reservedBy: data.reservedBy,
+        userId: data.userId,
         participants: data.participants,
         startTime: data.startTime,
         endTime: data.endTime,
@@ -96,13 +103,13 @@ function createReservationsRepository({ seed = defaultReservations(), rooms } = 
         cancelledAt: null
       };
       reservations.push(reservation);
-      return withRoom(reservation);
+      return withRelations(reservation);
     },
 
     async update(id, changes) {
       const reservation = reservations.find(r => r.id === id);
       Object.assign(reservation, changes);
-      return withRoom(reservation);
+      return withRelations(reservation);
     }
   };
 }

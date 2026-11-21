@@ -6,16 +6,17 @@ const reservationIdParams = z.object({
 
 const createReservationBody = z.object({
   roomId: z.number().int().positive(),
-  reservedBy: z.string().trim().min(3).max(100),
   participants: z.number().int().positive(),
   startTime: z.iso.datetime({ offset: true }),
   endTime: z.iso.datetime({ offset: true })
-}).strict();
+}).strict(); // userId / reservedBy w body -> 400 (właściciel pochodzi wyłącznie z tokenu)
 
 // Whitelista sortowania - nieznana wartość -> 400
 const SORT_VALUES = ["startTime", "-startTime", "createdAt", "-createdAt", "participants", "-participants"];
 
 const listReservationsQuery = z.object({
+  // Tylko dla ADMINa - uprawnienie sprawdza service
+  userId: z.coerce.number().int().positive().optional(),
   roomId: z.coerce.number().int().positive().optional(),
   buildingId: z.coerce.number().int().positive().optional(),
   status: z.enum(["CONFIRMED", "CANCELLED"]).optional(),

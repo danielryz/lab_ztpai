@@ -1,17 +1,18 @@
-# PostgreSQL 16 w kontenerze - konkretna wersja obrazu + nazwany volume (dane przetrwają usunięcie kontenera)
+# PostgreSQL 16 dla zadania 04 - osobny kontener i volume (port 5434), żeby nie ruszać bazy z zadania 03.
+# Hasło NIE jest zapisane w repozytorium - docker compose czyta je z pliku .env (DB_PASSWORD).
 services:
   db:
     image: postgres:16
-    container_name: room-booking-db
+    container_name: room-booking-db-zad4
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       POSTGRES_DB: room_booking
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
-      - room-booking-pgdata:/var/lib/postgresql/data
+      - room-booking-zad4-pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
 volumes:
-  room-booking-pgdata:
+  room-booking-zad4-pgdata:

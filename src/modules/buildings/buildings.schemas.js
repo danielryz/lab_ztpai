@@ -9,4 +9,10 @@ const createBuildingBody = z.object({
   address: z.string().trim().min(3).max(255)
 }).strict();
 
-module.exports = { buildingIdParams, createBuildingBody };
+// PATCH - częściowa zmiana, ale co najmniej jedno pole
+const updateBuildingBody = createBuildingBody.partial().strict().refine(
+  b => Object.keys(b).length > 0,
+  { message: "At least one field is required" }
+);
+
+module.exports = { buildingIdParams, createBuildingBody, updateBuildingBody };

@@ -1,2 +1,4 @@
 node_modules/
 .env
+# hasła dla klienta HTTP PhpStorm (requests.http)
+http-client.private.env.json

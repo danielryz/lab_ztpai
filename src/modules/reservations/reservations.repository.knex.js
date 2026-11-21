@@ -1,5 +1,5 @@
 // Jedyne miejsce, które zna tabelę "reservations" i jej kolumny.
-// Rezerwacja zawsze jest zwracana z salą i budynkiem (2x JOIN - stała liczba zapytań, brak N+1).
+// Rezerwacja zawsze jest zwracana z salą, budynkiem i właścicielem (3x JOIN - stała liczba zapytań, brak N+1).
 
 // Whitelista sortowania: wartość z API -> kolumna w SQL (nazwa kolumny nigdy nie pochodzi od klienta)
 const SORT_COLUMNS = {
@@ -24,7 +24,8 @@ function toReservation(row) {
       name: row.room_name,
       building: { id: row.building_id, name: row.building_name }
     },
-    reservedBy: row.reserved_by,
+    userId: row.user_id,
+    user: { id: row.user_id, email: row.user_email },
     participants: row.participants,
     startTime: row.start_time,
     endTime: row.end_time,
@@ -38,14 +39,15 @@ function createReservationsRepository(db) {
   function joined() {
     return db("reservations as r")
       .join("rooms as rm", "rm.id", "r.room_id")
-      .join("buildings as b", "b.id", "rm.building_id");
+      .join("buildings as b", "b.id", "rm.building_id")
+      .join("users as u", "u.id", "r.user_id");
   }
 
   function selectColumns(qb) {
     return qb.select(
-      "r.id", "r.room_id", "r.reserved_by", "r.participants", "r.start_time", "r.end_time",
+      "r.id", "r.room_id", "r.user_id", "r.participants", "r.start_time", "r.end_time",
       "r.status", "r.created_at", "r.cancelled_at",
-      "rm.name as room_name", "rm.building_id", "b.name as building_name"
+      "rm.name as room_name", "rm.building_id", "b.name as building_name", "u.email as user_email"
     );
   }
 
@@ -55,8 +57,10 @@ function createReservationsRepository(db) {
 
   return {
     // Filtrowanie, sortowanie i pagination robi baza (WHERE / ORDER BY / LIMIT / OFFSET)
-    async findAll({ roomId, buildingId, status, from, to, page = 1, limit = 20, sort = "startTime" } = {}) {
+    // userId - filtr właściciela (dla USER-a dokłada go service, niezależnie od query)
+    async findAll({ userId, roomId, buildingId, status, from, to, page = 1, limit = 20, sort = "startTime" } = {}) {
       const base = joined().modify(qb => {
+        if (userId) qb.where("r.user_id", userId);
         if (roomId) qb.where("r.room_id", roomId);
         if (buildingId) qb.where("rm.building_id", buildingId);
         if (status) qb.where("r.status", status);
@@ -89,11 +93,11 @@ function createReservationsRepository(db) {
       return rows.map(toReservation);
     },
 
-    async create({ roomId, reservedBy, participants, startTime, endTime, status, createdAt }) {
+    async create({ roomId, userId, participants, startTime, endTime, status, createdAt }) {
       const [{ id }] = await db("reservations")
         .insert({
           room_id: roomId,
-          reserved_by: reservedBy,
+          user_id: userId,
           participants,
           start_time: startTime,
           end_time: endTime,
@@ -102,6 +106,10 @@ function createReservationsRepository(db) {
         })
         .returning("id");
       return findById(id);
+    },
+
+    async existsForRoom(roomId) {
+      return Boolean(await db("reservations").where({ room_id: roomId }).first("id"));
     },
 
     async update(id, changes) {
